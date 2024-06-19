@@ -1,37 +1,26 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import {
-  Box,
-  Typography,
-  Container,
-  CircularProgress,
-  Avatar,
-  Button,
-} from "@mui/material";
+import { Box, Typography, Container, CircularProgress, Avatar, Button } from "@mui/material";
+import APIService from "../services/APIService";
 
 function Home() {
   const [username, setUsername] = useState<string>("");
-  const [motto, setMotto] = useState<string>("My motto goes here!");
+  const [motto, setMotto] = useState<string>("");  // Added motto state
   const [loading, setLoading] = useState<boolean>(true);
+  const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem("access_token");
-
-      if (token) {
-        try {
-          const response = await axios.get("http://localhost:3002/user", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          setUsername(response.data.username);
-        } catch (error) {
+      try {
+        const response = await APIService.request("/user", "GET", null, true);
+        setUsername(response.username);
+        setMotto(response.motto);  // Set the retrieved motto
+      } catch (error: any) {
+        if (error.message.includes("Please update your client application")) {
+          setMessage(error.message);
+        } else {
           console.error("Error fetching user:", error);
-        } finally {
-          setLoading(false);
         }
-      } else {
+      } finally {
         setLoading(false);
       }
     };
@@ -41,7 +30,7 @@ function Home() {
 
   const handleLogout = async () => {
     try {
-      await axios.post("/logout");
+      await APIService.request("/logout", "POST", null, true);
       localStorage.removeItem("access_token");
       // Redirect or perform any other necessary actions after logout
     } catch (error) {
@@ -51,52 +40,26 @@ function Home() {
 
   return (
     <Container maxWidth="sm">
-      <Box
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        minHeight="100vh"
-      >
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
         {loading ? (
           <CircularProgress />
         ) : (
-          <Box
-            sx={{
-              bgcolor: "background.paper",
-              boxShadow: 3,
-              borderRadius: 2,
-              p: 4,
-              textAlign: "center",
-            }}
-          >
-            <Avatar
-              sx={{
-                width: 64,
-                height: 64,
-                backgroundColor: "primary.main",
-                mb: 2,
-              }}
-            />
-            <Typography variant="h6" gutterBottom>
-              {username}
+          <Box sx={{ bgcolor: "background.paper", boxShadow: 3, borderRadius: 2, p: 4, textAlign: "center" }}>
+            <Avatar sx={{ width: 64, height: 64, backgroundColor: "primary.main", mb: 2 }} />
+            <Typography variant="h4" gutterBottom>
+              Welcome, {username}
             </Typography>
             <Typography variant="body1" gutterBottom>
-              {motto}
+              Motto: {motto}
             </Typography>
-            <Box mt={2}>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{ mr: 2 }}
-                onClick={() => setMotto("New Motto!")}
-              >
-                Record (New) Motto
-              </Button>
-              <Button variant="outlined" color="error" onClick={handleLogout}>
-                Logout
-              </Button>
-            </Box>
+            <Button onClick={handleLogout} variant="contained" color="primary">
+              Logout
+            </Button>
+            {message && (
+              <Typography variant="body1" color="error" sx={{ mt: 2 }}>
+                {message}
+              </Typography>
+            )}
           </Box>
         )}
       </Box>

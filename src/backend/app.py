@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
+from cryptography.fernet import Fernet
 
 import os
 
@@ -10,26 +11,30 @@ db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 
+# Generate a key for encryption
+encryption_key = Fernet.generate_key()
+cipher_suite = Fernet(encryption_key)
 
 def create_app():
     app = Flask(__name__)
 
+    # Configuration for the app
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
-    app.config['SECRET_KEY'] = 'secret123'
-    app.config['JWT_SECRET_KEY'] = 'secret1234'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'secret123')
+    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'secret1234')
     app.config['SESSION_TYPE'] = 'filesystem'  # Store session data on the filesystem
 
-    CORS(
-        app,
-        resources={r"*": {"origins": ["*"]}},
-        allow_headers=["Authorization", "Content-Type"],
-        methods=["GET", "POST", "OPTIONS"],
-        max_age=86400
-    )
+    CORS(app, resources={r"*": {"origins": ["*"]}}, allow_headers=["Authorization", "Content-Type"], methods=["GET", "POST", "OPTIONS"], max_age=86400)
 
     db.init_app(app)
     bcrypt.init_app(app)
     jwt.init_app(app)
+
+    @app.before_request
+    def check_app_version():
+        app_version = request.headers.get('app-version', '0.0.0')
+        if app_version < '1.2.0':
+            return jsonify({'message': 'Please update your client application to the latest version.'}), 426
 
     with app.app_context():
         db.create_all()
@@ -42,12 +47,14 @@ def create_app():
     def register():
         data = request.get_json()
         hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        encrypted_motto = cipher_suite.encrypt(data['motto'].encode()).decode('utf-8')
         new_user = User(
             username=data['username'],
             password=hashed_password,
             name=data['name'],
             bio=data['bio'],
-            profile_pic_url=data['profile_pic_url']
+            profile_pic_url=data['profile_pic_url'],
+            motto=encrypted_motto
         )
         db.session.add(new_user)
         db.session.commit()
@@ -69,12 +76,13 @@ def create_app():
     @jwt_required()
     def user():
         current_user = get_jwt_identity()
-        # return user information
         user = User.query.filter_by(username=current_user['username']).first()
         if user:
+            decrypted_motto = cipher_suite.decrypt(user.motto.encode()).decode('utf-8')
             user_data = {
                 'username': user.username,
-                'id': user.id
+                'id': user.id,
+                'motto': decrypted_motto
             }
             return jsonify(user_data), 200
         return jsonify({'message': 'User not found'}), 404
@@ -86,6 +94,10 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+    bio = db.Column(db.String(500), nullable=True)
+    profile_pic_url = db.Column(db.String(500), nullable=True)
+    motto = db.Column(db.String(500), nullable=False)  # Store the encrypted motto
 
 
 if __name__ == '__main__':

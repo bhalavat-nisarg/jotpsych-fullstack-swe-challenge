@@ -1,105 +1,57 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import {
-    Box,
-    Typography,
-    Avatar,
-    Container,
-    CircularProgress,
-} from "@mui/material";
+import { Box, Typography, Container, CircularProgress, Avatar } from "@mui/material";
+import APIService from "../services/APIService";
 
-function Profile() {
-    const [userData, setUserData] = useState<{
-        username: string;
-        name: string;
-        bio: string;
-        profile_pic_url: string;
-    } | null>(null);
-    const [loading, setLoading] = useState<boolean>(true);
+function Profiles() {
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [message, setMessage] = useState<string>("");
 
-    useEffect(() => {
-        const fetchUserData = async () => {
-            const token = localStorage.getItem("access_token");
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const response = await APIService.request("/profiles", "GET", null, true);
+        setProfiles(response);
+      } catch (error: any) {
+        if (error.message.includes("Please update your client application")) {
+          setMessage(error.message);
+        } else {
+          console.error("Error fetching profiles:", error);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
-            if (token) {
-                try {
-                    const response = await axios.get("http://localhost:3002/user", {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    });
-                    setUserData(response.data);
-                } catch (error) {
-                    console.error("Error fetching user data:", error);
-                } finally {
-                    setLoading(false);
-                }
-            } else {
-                setLoading(false);
-            }
-        };
+    fetchProfiles();
+  }, []);
 
-        fetchUserData();
-    }, []);
-
-    if (loading) {
-        return (
-            <Container maxWidth="sm">
-                <Box
-                    display="flex"
-                    flexDirection="column"
-                    alignItems="center"
-                    justifyContent="center"
-                    minHeight="100vh"
-                >
-                    <CircularProgress />
-                </Box>
-            </Container>
-        );
-    }
-
-    if (!userData) {
-        return (
-            <Container maxWidth="sm">
-                <Box
-                    display="flex"
-                    flexDirection="column"
-                    alignItems="center"
-                    justifyContent="center"
-                    minHeight="100vh"
-                >
-                    <Typography variant="h5">User not found</Typography>
-                </Box>
-            </Container>
-        );
-    }
-
-    return (
-        <Container maxWidth="sm">
-            <Box
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                minHeight="100vh"
-            >
-                <Avatar
-                    src={userData.profile_pic_url}
-                    alt={userData.name}
-                    sx={{ width: 128, height: 128, mb: 2 }}
-                />
+  return (
+    <Container maxWidth="md">
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
+        {loading ? (
+          <CircularProgress />
+        ) : (
+          <Box sx={{ width: "100%" }}>
+            {profiles.map((profile, index) => (
+              <Box key={index} sx={{ bgcolor: "background.paper", boxShadow: 3, borderRadius: 2, p: 4, mb: 2 }}>
+                <Avatar src={profile.profilePicUrl} sx={{ width: 64, height: 64, backgroundColor: "primary.main", mb: 2 }} />
                 <Typography variant="h5" gutterBottom>
-                    {userData.name}
+                  {profile.name}
                 </Typography>
-                <Typography variant="body1" gutterBottom>
-                    @{userData.username}
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                    {userData.bio}
-                </Typography>
-            </Box>
-        </Container>
-    );
+                <Typography variant="body1">{profile.bio}</Typography>
+              </Box>
+            ))}
+            {message && (
+              <Typography variant="body1" color="error" sx={{ mt: 2 }}>
+                {message}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Box>
+    </Container>
+  );
 }
 
-export default Profile;
+export default Profiles;
