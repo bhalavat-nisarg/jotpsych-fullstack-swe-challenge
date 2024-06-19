@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -17,6 +17,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
     app.config['SECRET_KEY'] = 'secret123'
     app.config['JWT_SECRET_KEY'] = 'secret1234'
+    app.config['SESSION_TYPE'] = 'filesystem'  # Store session data on the filesystem
 
     CORS(
         app,
@@ -40,11 +41,18 @@ def create_app():
     @app.route('/register', methods=['POST'])
     def register():
         data = request.get_json()
-        hashed_password = bcrypt.generate_password_hash(
-            data['password']).decode('utf-8')
-        new_user = User(username=data['username'], password=hashed_password)
+        hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        new_user = User(
+            username=data['username'],
+            password=hashed_password,
+            name=data['name'],
+            bio=data['bio'],
+            profile_pic_url=data['profile_pic_url']
+        )
         db.session.add(new_user)
         db.session.commit()
+        access_token = create_access_token(identity={'username': data['username']})
+        session['access_token'] = access_token
         return jsonify({'message': 'User registered successfully'}), 201
 
     @app.route('/login', methods=['POST'])
@@ -52,9 +60,9 @@ def create_app():
         data = request.get_json()
         user = User.query.filter_by(username=data['username']).first()
         if user and bcrypt.check_password_hash(user.password, data['password']):
-            access_token = create_access_token(
-                identity={'username': user.username})
-            return jsonify({'token': access_token}), 200
+            access_token = create_access_token(identity={'username': user.username})
+            session['access_token'] = access_token  # Store token in the session
+            return jsonify({'message': 'Login successful'}), 200
         return jsonify({'message': 'Invalid credentials'}), 401
 
     @app.route('/user', methods=['GET'])
@@ -62,6 +70,14 @@ def create_app():
     def user():
         current_user = get_jwt_identity()
         # return user information
+        user = User.query.filter_by(username=current_user['username']).first()
+        if user:
+            user_data = {
+                'username': user.username,
+                'id': user.id
+            }
+            return jsonify(user_data), 200
+        return jsonify({'message': 'User not found'}), 404
 
     return app
 
