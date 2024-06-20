@@ -6,7 +6,7 @@ class APIService {
 
   private constructor() {
     this.baseUrl = 'http://localhost:3002';
-    this.appVersion = '1.0.0';
+    this.appVersion = '1.2.1';
     this.token = null;
   }
 
