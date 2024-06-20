@@ -4,8 +4,9 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from cryptography.fernet import Fernet
-
 import os
+import time
+import random
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -14,6 +15,7 @@ jwt = JWTManager()
 # Generate a key for encryption
 encryption_key = Fernet.generate_key()
 cipher_suite = Fernet(encryption_key)
+
 
 def create_app():
     app = Flask(__name__)
@@ -24,7 +26,8 @@ def create_app():
     app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'secret1234')
     app.config['SESSION_TYPE'] = 'filesystem'  # Store session data on the filesystem
 
-    CORS(app, resources={r"*": {"origins": ["*"]}}, allow_headers=["Authorization", "Content-Type"], methods=["GET", "POST", "OPTIONS"], max_age=86400)
+    # Configure CORS
+    CORS(app, resources={r"/*": {"origins": "*"}})
 
     db.init_app(app)
     bcrypt.init_app(app)
@@ -87,6 +90,29 @@ def create_app():
             return jsonify(user_data), 200
         return jsonify({'message': 'User not found'}), 404
 
+    def mock_transcription(audio_file):
+        # Simulate a random delay
+        time.sleep(random.randint(2, 5))
+        # Mock transcription
+        return "This is a mock transcription of the uploaded audio."
+
+    @app.route('/upload', methods=['POST'])
+    @jwt_required()
+    def upload():
+        if 'audio' not in request.files:
+            return jsonify({'message': 'No audio file part'}), 400
+        audio = request.files['audio']
+        current_user = get_jwt_identity()
+        user = User.query.filter_by(username=current_user['username']).first()
+        if user:
+            # Mock the transcription process
+            transcription = mock_transcription(audio)
+            encrypted_motto = cipher_suite.encrypt(transcription.encode()).decode('utf-8')
+            user.motto = encrypted_motto
+            db.session.commit()
+            return jsonify({'message': 'Transcription complete', 'transcription': transcription}), 200
+        return jsonify({'message': 'User not found'}), 404
+
     return app
 
 
@@ -102,4 +128,4 @@ class User(db.Model):
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(port=3002, debug=True)
+    app.run(port=3002, debug=True, threaded=True)

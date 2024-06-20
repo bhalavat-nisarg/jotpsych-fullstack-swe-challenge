@@ -5,8 +5,8 @@ class APIService {
   private token: string | null;
 
   private constructor() {
-    this.baseUrl = "http://localhost:3002";
-    this.appVersion = "1.0.0"; // Initial version below 1.2.0 for demonstration
+    this.baseUrl = 'http://localhost:3002';
+    this.appVersion = '1.0.0';
     this.token = null;
   }
 
@@ -24,25 +24,34 @@ class APIService {
     auth: boolean = false
   ): Promise<any> {
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      "app-version": this.appVersion,
+      'app-version': this.appVersion,
     };
 
     if (auth && this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const options: RequestInit = {
       method,
       headers,
-      body: body ? JSON.stringify(body) : null,
-    });
+    };
+
+    if (body) {
+      if (body instanceof FormData) {
+        options.body = body;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+      }
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, options);
 
     if (!response.ok) {
       if (response.status === 426) {
-        throw new Error("Please update your client application to the latest version.");
+        throw new Error('Please update your client application to the latest version.');
       }
-      throw new Error("Network response was not ok");
+      throw new Error('Network response was not ok');
     }
 
     return response.json();
